@@ -140,6 +140,7 @@ struct redisCommand redisCommandTable[] = {
     {"lrange",lrangeCommand,4,"r",0,NULL,1,1,1,0,0},
     {"ltrim",ltrimCommand,4,"w",0,NULL,1,1,1,0,0},
     {"lrem",lremCommand,4,"w",0,NULL,1,1,1,0,0},
+	{"lpoprpush",lpoprpushCommand,3,"wm",0,NULL,1,2,1,0,0},
     {"rpoplpush",rpoplpushCommand,3,"wm",0,NULL,1,2,1,0,0},
     {"sadd",saddCommand,-3,"wm",0,NULL,1,1,1,0,0},
     {"srem",sremCommand,-3,"w",0,NULL,1,1,1,0,0},

@@ -586,7 +586,7 @@ struct redisServer {
     off_t loading_loaded_bytes;
     time_t loading_start_time;
     /* Fast pointers to often looked up command */
-    struct redisCommand *delCommand, *multiCommand, *lpushCommand;
+    struct redisCommand *delCommand, *multiCommand, *lpushCommand, *rpushCommand;
     int cronloops;                  /* Number of times the cron function run */
     time_t lastsave;                /* Unix time of last save succeeede */
     /* Fields used only for stats */
@@ -1147,6 +1147,7 @@ void flushdbCommand(redisClient *c);
 void flushallCommand(redisClient *c);
 void sortCommand(redisClient *c);
 void lremCommand(redisClient *c);
+void lpoprpushCommand(redisClient *c);
 void rpoplpushCommand(redisClient *c);
 void infoCommand(redisClient *c);
 void mgetCommand(redisClient *c);

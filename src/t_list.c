@@ -729,6 +729,69 @@ void rpoplpushCommand(redisClient *c) {
     }
 }
 
+void lpoprpushHandlePush(redisClient *origclient, redisClient *c, robj *dstkey, robj *dstobj, robj *value) {
+    if (!handleClientsWaitingListPush(origclient,dstkey,value)) {
+        /* Create the list if the key does not exist */
+        if (!dstobj) {
+            dstobj = createZiplistObject();
+            dbAdd(c->db,dstkey,dstobj);
+        } else {
+            signalModifiedKey(c->db,dstkey);
+        }
+        listTypePush(dstobj,value,REDIS_TAIL);
+        /* Additionally propagate this PUSH operation together with
+         * the operation performed by the command. */
+        {
+            robj **argv = zmalloc(sizeof(robj*)*3);
+            argv[0] = createStringObject("RPUSH",5);
+            argv[1] = dstkey;
+            argv[2] = value;
+            incrRefCount(argv[1]);
+            incrRefCount(argv[2]);
+            alsoPropagate(server.rpushCommand,c->db->id,argv,3,
+                          REDIS_PROPAGATE_AOF|REDIS_PROPAGATE_REPL);
+        }
+    }
+    /* Always send the pushed value to the client. */
+    addReplyBulk(c,value);
+}
+
+void lpoprpushCommand(redisClient *c) {
+	robj *sobj, *value;
+    if ((sobj = lookupKeyWriteOrReply(c,c->argv[1],shared.nullbulk)) == NULL ||
+        checkType(c,sobj,REDIS_LIST)) return;
+
+    if (listTypeLength(sobj) == 0) {
+        addReply(c,shared.nullbulk);
+	} else {
+        robj *dobj = lookupKeyWrite(c->db,c->argv[2]);
+        robj *touchedkey = c->argv[1];
+		
+		if (dobj && checkType(c,dobj,REDIS_LIST)) return;
+		value = listTypePop(sobj,REDIS_TAIL);
+       /* We saved touched key, and protect it, since rpoplpushHandlePush
+        * may change the client command argument vector. */
+       incrRefCount(touchedkey);
+       lpoprpushHandlePush(c,c,c->argv[2],dobj,value);
+
+       /* listTypePop returns an object with its refcount incremented */
+       decrRefCount(value);
+
+       /* Delete the source list when it is empty */
+       if (listTypeLength(sobj) == 0) dbDelete(c->db,touchedkey);
+       signalModifiedKey(c->db,touchedkey);
+       decrRefCount(touchedkey);
+       server.dirty++;
+	   
+      /* Replicate this as a simple LPOP since the RPUSH side is replicated
+       * by rpoplpushHandlePush() call if needed (it may not be needed
+       * if a client is blocking wait a push against the list). */
+      rewriteClientCommandVector(c,2,
+          resetRefCount(createStringObject("LPOP",4)),
+          c->argv[1]);
+	}
+}
+
 /*-----------------------------------------------------------------------------
  * Blocking POP operations
  *----------------------------------------------------------------------------*/
